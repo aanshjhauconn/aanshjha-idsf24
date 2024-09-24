@@ -1,0 +1,369 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "---\n",
+        "title: \"Aansh Jha - Homework 4\"\n",
+        "format:\n",
+        "  pdf:\n",
+        "    keep-tex: true\n",
+        "    include-in-header: \n",
+        "       text: |\n",
+        "         \\usepackage{fvextra}\n",
+        "         \\DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\\\\{\\}}\n",
+        "         \\DefineVerbatimEnvironment{OutputCode}{Verbatim}{breaklines,commandchars=\\\\\\{\\}}\n",
+        "    code-fold: true\n",
+        "    colorlinks: true\n",
+        "jupyter: python3\n",
+        "\n",
+        "---\n",
+        "\n",
+        "\n",
+        "# Step 1 - Importing df\n"
+      ],
+      "id": "7fe44a1f"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "import pandas as pd\n",
+        "import numpy as np\n",
+        "import matplotlib\n",
+        "\n",
+        "\n",
+        "df = pd.read_csv('nyccrashes_2024w0630_by20240916.csv')"
+      ],
+      "id": "3c1f8372",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# Step 2 - Clean up variables\n"
+      ],
+      "id": "6da25861"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# use lower cases and replace spaces with underscores.\n",
+        "df.columns = df.columns.str.lower().str.replace(' ', '_')"
+      ],
+      "id": "6bb53cbb",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# Step 4 - Get the basic summaries of each variable\n",
+        "### The missing percentage"
+      ],
+      "id": "519a6549"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# missing percentage\n",
+        "missing_percentage = df.isnull().mean() * 100\n",
+        "print(\"Missing Percentage:\\n\", missing_percentage)"
+      ],
+      "id": "fc5773c1",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Descriptive statistics for continuous variables"
+      ],
+      "id": "57b21ff6"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# descriptive statistics for continuous variables\n",
+        "descriptive_stats = df.describe()\n",
+        "print(\"\\nDescriptive Statistics:\\n\", descriptive_stats)"
+      ],
+      "id": "6a9f61ad",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Frequency tables for discrete variables"
+      ],
+      "id": "4f685382"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# Frequency tables for discrete variables\n",
+        "frequency_tables = {col: df[col].value_counts() for col in df.select_dtypes(include=['object', 'category']).columns}\n",
+        "print(\"\\nFrequency Tables:\\n\", frequency_tables)"
+      ],
+      "id": "2bda790b",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# Step 4 - Switch invalid longitude and latitude values to Na"
+      ],
+      "id": "1f1d2d5d"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "latitude_column = 'latitude'  # Replace with actual column name\n",
+        "longitude_column = 'longitude'  # Replace with actual column name\n",
+        "\n",
+        "#latitude: -90 to 90\n",
+        "df[latitude_column] = np.where(\n",
+        "    (df[latitude_column] < -90) | (df[latitude_column] > 90), \n",
+        "    np.nan, \n",
+        "    df[latitude_column]\n",
+        ")\n",
+        "\n",
+        "#langitude: -180 to 180\n",
+        "df[longitude_column] = np.where(\n",
+        "    (df[longitude_column] < -180) | (df[longitude_column] > 180), \n",
+        "    np.nan, \n",
+        "    df[longitude_column]\n",
+        ")\n",
+        "print(\"\\nLongitude Column:\\n\", df[longitude_column])\n",
+        "print(\"\\nLatitude Column:\\n\", df[latitude_column])"
+      ],
+      "id": "b9761d07",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# Step 5 - Validate ZIP codes"
+      ],
+      "id": "0a1e3c78"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# validate ZIP codes that are in range\n",
+        "valid_nyc_zip_codes = {i for i in range(10001, 14975)}  \n",
+        "\n",
+        "# replace invalid ZIP codes with NaN\n",
+        "df['zip_code'] = np.where(\n",
+        "    df['zip_code'].isin(valid_nyc_zip_codes), \n",
+        "    df['zip_code'], \n",
+        "    np.nan\n",
+        ")\n",
+        "\n",
+        "print(\"\\nUpdated ZIP Code Column (after validation):\\n\", df['zip_code'].head())"
+      ],
+      "id": "f3c877be",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# Step 6: Check for missing values in zip_code and borough\n"
+      ],
+      "id": "76e3e3ec"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "#identify rows where values are null\n",
+        "missing_zip = df['zip_code'].isnull()\n",
+        "missing_borough = df['borough'].isnull()\n",
+        "\n",
+        "# count missing values\n",
+        "missing_zip_count = missing_zip.sum()\n",
+        "missing_borough_count = missing_borough.sum()\n",
+        "\n",
+        "# check for co-occurrence\n",
+        "co_occur_missing = df[missing_zip & missing_borough]\n",
+        "co_occur_count = co_occur_missing.shape[0]\n",
+        "\n",
+        "print(f\"Co-occurring Missing ZIP CODE and BOROUGH Count: {co_occur_count}\")"
+      ],
+      "id": "d98a81e8",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# Step 7: Check for cases where zip_code and borough are missing but geo codes are not missing"
+      ],
+      "id": "631f9405"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# check for cases where both are missing but geo codes are present\n",
+        "missing_but_geo_present = df[missing_zip & missing_borough & df['latitude'].notnull() & df['longitude'].notnull()]\n",
+        "\n",
+        "# Count of such cases\n",
+        "missing_geo_present_count = missing_but_geo_present.shape[0]\n",
+        "print(f\"Count of cases where ZIP CODE and BOROUGH are missing but geo codes are present: {missing_geo_present_count}\")\n",
+        "\n",
+        "# replace missing zip_code and borough with latitude and longitude (geo code)\n",
+        "df.loc[missing_zip & missing_borough, 'zip_code'] = df['latitude']\n",
+        "df.loc[missing_zip & missing_borough, 'borough'] = df['longitude']\n",
+        "\n",
+        "# Display updated DataFrame for verification\n",
+        "print(\"\\nUpdated DataFrame (sample):\\n\", df[['zip_code', 'borough']].head())"
+      ],
+      "id": "45149c69",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# Step 8 - Is it redundant to keep both location and the longitude/latitude at the NYC Open Data server?\n",
+        "Although we recieve the exact point of location when we use long/lati, it isn't user friendly. This method takes up a lot of stored data space and can cause confusion when handiling and cleaning the data. However, I do believe that it isn't redundant to keep both. Having a percise location data point would work in our favor if we could visualize it on a map. This way, we can figure out the problem that is occuring in that specific spot. \n",
+        "\n",
+        "# Step 9 - Check the frequency of crash_time by hour. Is there a matter of bad luck at exactly midnight? \n"
+      ],
+      "id": "630dcfa1"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "df['hour'] = pd.to_datetime(df['crash_time'], format='%H:%M').dt.hour\n",
+        "\n",
+        "# calculate frequency of crashes by hour\n",
+        "crash_frequency_by_hour = df['hour'].value_counts().sort_index()\n",
+        "\n",
+        "\n",
+        "print(\"Crash Frequency by Hour:\\n\", crash_frequency_by_hour)\n",
+        "\n",
+        "# check for crashes at midnight\n",
+        "midnight_crashes = crash_frequency_by_hour[0]  # hour 0 corresponds to midnight\n",
+        "print(f\"\\nNumber of crashes at midnight: {midnight_crashes}\")"
+      ],
+      "id": "a57bdbb6",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Is there a matter of bad luck at exactly midnight? How would you interpret this?\n",
+        "During midnight, many people might engage in behavior that is reckless. For example drinking or even theft along with other illegal activities as it is done while it is dark and most of the population is at home already. But also, we can account low visibility for the accidents that occur, as driving in the dark at this late hour can be dangerous. It isn't bad luck, it is simply due to the fact that most crimes and accidents happen at night.\n",
+        "\n",
+        "# Step 10 - Are the number of persons killed/injured the summation of the numbers of pedestrians, cyclist, and motorists killed/injured?"
+      ],
+      "id": "0c164fde"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# check if total killed/injured matches the sum of specific categories\n",
+        "df['total_persons_injured'] = df['number_of_persons_injured']\n",
+        "df['total_persons_killed'] = df['number_of_persons_killed']\n",
+        "\n",
+        "# Calculate sums\n",
+        "df['calculated_total_injured'] = (\n",
+        "    df['number_of_pedestrians_injured'] + \n",
+        "    df['number_of_cyclist_injured'] + \n",
+        "    df['number_of_motorist_injured']\n",
+        ")\n",
+        "\n",
+        "df['calculated_total_killed'] = (\n",
+        "    df['number_of_pedestrians_killed'] + \n",
+        "    df['number_of_cyclist_killed'] + \n",
+        "    df['number_of_motorist_killed']\n",
+        ")\n",
+        "\n",
+        "# check for matches\n",
+        "injured_match = (df['total_persons_injured'] == df['calculated_total_injured']).all()\n",
+        "killed_match = (df['total_persons_killed'] == df['calculated_total_killed']).all()\n",
+        "\n",
+        "print(f\"Total persons injured match: {injured_match}\")\n",
+        "print(f\"Total persons killed match: {killed_match}\")"
+      ],
+      "id": "68f6bedc",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Is it redundant to keep these two columns at the NYC Open Data server?\n",
+        "It is redundant to keep both killed and injured columns as we can see there are discrepancies between the total number of persons injured reported and the sum of the specific categories of injuries (pedestrians, cyclists, and motorists injured). We cannot rely on the number of persons injured column and must fix the summation of the injured columns.\n",
+        "\n",
+        "# Step 11 - Print the whole frequency table of contributing_factor_vehicle_1. Convert lower cases to uppercases and check the frequencies again."
+      ],
+      "id": "5091f637"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "#print the whole frequency table of contributing_factor_vehicle_1\n",
+        "frequency_table = df['contributing_factor_vehicle_1'].value_counts()\n",
+        "print(\"\\nFrequency Table for Contributing Factor Vehicle 1:\\n\", frequency_table)\n",
+        "\n",
+        "# convert to upper case and check frequencies again\n",
+        "df['contributing_factor_vehicle_1'] = df['contributing_factor_vehicle_1'].str.upper()\n",
+        "upper_case_frequency_table = df['contributing_factor_vehicle_1'].value_counts()\n",
+        "print(\"\\nFrequency Table for Contributing Factor Vehicle 1 (Upper Case):\\n\", upper_case_frequency_table)"
+      ],
+      "id": "f10dfe1c",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# Step 12 - Provided an opportunity to meet the data provider, what suggestions would you make based on your data exploration experience?\n",
+        "\n",
+        "While calculating the summation of injuries, I found an error with the data. We can see that the total amount of persons injured do not equal the total amount of each injury reported. Perhaps, we can add a new column of unspecified injuries to report in order to make the total correct. Another change I would suggest is fixing the longittude and latitude columns as some values are out of range. Moreover, if we were to stick with longitude and latitude values to begin with, then the other location columns are redundant. Besides, many of the columns like zip code, borough, street name, off street name and cross street name are missing. We should stick to improving the value inputs in the lat./long. columns instead. "
+      ],
+      "id": "12ed36b0"
+    }
+  ],
+  "metadata": {
+    "kernelspec": {
+      "name": "python3",
+      "language": "python",
+      "display_name": "Python 3 (ipykernel)",
+      "path": "C:\\Users\\aansh\\AppData\\Roaming\\Python\\share\\jupyter\\kernels\\python3"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 5
+}
