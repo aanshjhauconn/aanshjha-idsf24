@@ -1,17 +1,9 @@
 ---
-title: "Aansh Jha - Homework 4"
+title: "Aansh Jha Homework 4"
 format:
   pdf:
-    keep-tex: true
-    include-in-header: 
-       text: |
-         \usepackage{fvextra}
-         \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
-         \DefineVerbatimEnvironment{OutputCode}{Verbatim}{breaklines,commandchars=\\\{\}}
-    code-fold: true
-    colorlinks: true
+    code-fold: false
 jupyter: python3
-
 ---
 
 # Step 1 - Importing df
