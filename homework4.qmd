@@ -21,159 +21,112 @@ df = pd.read_csv('nyccrashes_2024w0630_by20240916.csv')
 # 2 - Clean up the variable names. Use lower cases and replace spaces with underscores.
 ```{python}
 
-# use lower cases and replace spaces with underscores.
 df.columns = df.columns.str.lower().str.replace(' ', '_')
 ```
 
 # 3 - Get the basic summaries of each variables: missing percentage; descriptive statistics for continuous variables; frequency tables for discrete variables.
 ```{python}
-missing_percentage = df.isnull().mean() * 100
+missing_percentage = df.isna().mean() * 100
 print("Missing Percentage:", missing_percentage)
-```
-```{python}
 descriptive_stats = df.describe()
 print("Descriptive Statistics:", descriptive_stats)
-```
-```{python}
-frequency_tables = {col: df[col].value_counts() for col in df.select_dtypes(include=['object', 'category']).columns}
-print("Frequency Tables:", frequency_tables)
+freq_tables = {}
+for col in df.select_dtypes(include=['object', 'category']).columns:
+    value_counts = df[col].value_counts()
+    freq_tables[col] = value_counts
+print("Frequency Tables:", freq_tables)
 ```
 
 # 4 - Are their invalid `longitude` and `latitude` in the data? If so, replace them with `NA`.
 ```{python}
-latitude_column = 'latitude'  
-longitude_column = 'longitude'  
+latitude_col = 'latitude'
+longitude_col = 'longitude'
 
-#latitude: -90 to 90
-df[latitude_column] = np.where(
-    (df[latitude_column] < -90) | (df[latitude_column] > 90), 
-    np.nan, 
-    df[latitude_column]
-)
+df[latitude_col] = np.where((df[latitude_col] < -90) | (df[latitude_col] > 90), np.nan, df[latitude_col])
 
-#langitude: -180 to 180
-df[longitude_column] = np.where(
-    (df[longitude_column] < -180) | (df[longitude_column] > 180), 
-    np.nan, 
-    df[longitude_column]
-)
-print("Longitude Column:", df[longitude_column])
-print("Latitude Column:", df[latitude_column])
+df[longitude_col] = np.where((df[longitude_col] < -180) | (df[longitude_col] > 180), np.nan, df[longitude_col])
+
+print("Latitude sample:", df[latitude_col].head())
+print("Longitude sample:", df[longitude_col].head())
 ```
 
 # 5 - Are there `zip_code` values that are not legit NYC zip codes? If so, replace them with `NA`.
 ```{python}
-# validate ZIP codes that are in range
-valid_nyc_zip_codes = {i for i in range(10001, 14975)}  
+valid_codes = set() 
 
-# replace invalid ZIP codes with NaN
-df['zip_code'] = np.where(
-    df['zip_code'].isin(valid_nyc_zip_codes), 
-    df['zip_code'], 
-    np.nan
-)
+for i in range(10001, 14975):
+    valid_codes.add(i)
+
+for index, zip_code in df['zip_code'].items():
+    if zip_code in valid_codes:
+        df.at[index, 'zip_code'] = zip_code
+    else:
+        df.at[index, 'zip_code'] = np.nan
 
 print("Updated ZIP Codes:", df['zip_code'].head())
 ```
 
 # 6: Are there missing in `zip_code` and `borough`? Do they always co-occur?
 ```{python}
-#identify rows where values are null
-missing_zip = df['zip_code'].isnull()
-missing_borough = df['borough'].isnull()
+missing_zip = df['zip_code'].isna()
+missing_borough = df['borough'].isna()
 
-# count missing values
-missing_zip_count = missing_zip.sum()
-missing_borough_count = missing_borough.sum()
-
-# check for co-occurrence
-co_occur_missing = df[missing_zip & missing_borough]
-co_occur_count = co_occur_missing.shape[0]
-
-print(f"Co-occurring Missing ZIP CODE and BOROUGH Count: {co_occur_count}")
+co_occur_missing_count = df[missing_zip & missing_borough].shape[0]
+print(f"Number of cases where both ZIP and Borough are missing: {co_occur_missing_count}")
 ```
 
 # 7 - Are there cases where `zip_code` and `borough` are missing but the geo codes are not missing? If so, fill in `zip_code` and `borough` using the geo codes.
 ```{python}
-# check for cases where both are missing but geo codes are present
-missing_but_geo_present = df[missing_zip & missing_borough & df['latitude'].notnull() & df['longitude'].notnull()]
+missing_geo = df[missing_zip & missing_borough & df['latitude'].notna() & df['longitude'].notna()]
 
-# Count of such cases
-missing_geo_present_count = missing_but_geo_present.shape[0]
-print(f"Count of cases where ZIP CODE and BOROUGH are missing but geo codes are present: {missing_geo_present_count}")
+print(f"Number of missing ZIP and Borough with available geolocation: {missing_geo.shape[0]}")
 
-# replace missing zip_code and borough with latitude and longitude (geo code)
 df.loc[missing_zip & missing_borough, 'zip_code'] = df['latitude']
 df.loc[missing_zip & missing_borough, 'borough'] = df['longitude']
 
-# Display updated DataFrame for verification
-print("\nUpdated DataFrame (sample):\n", df[['zip_code', 'borough']].head())
-
+print("Sample of updated records:", df[['zip_code', 'borough']].head())
 ```
 
 # 8 - Is it redundant to keep both location and the longitude/latitude at the NYC Open Data server?
-Although we recieve the exact point of location when we use long/lati, it isn't user friendly. This method takes up a lot of stored data space and can cause confusion when handiling and cleaning the data. However, I do believe that it isn't redundant to keep both. Having a percise location data point would work in our favor if we could visualize it on a map. This way, we can figure out the problem that is occuring in that specific spot. 
+Longitude and latitude offer precise geolocation for accurate mapping, while zip codes and boroughs are more user-friendly. Keeping both is useful for identifying NYC hotspots through geographic analysis.
 
-# 9 - Check the frequency of `crash_time` by hour. Is there a matter of bad luck at exactly midnight? How would you interpret this? 
+
+# 9 - Check the frequency of `crash_time` by hour. Is there a matter of bad luck at exactly midnight? How would you interpret this? Is there a matter of bad luck at exactly midnight? How would you interpret this?
 
 ```{python}
-
-df['hour'] = pd.to_datetime(df['crash_time'], format='%H:%M').dt.hour
-
-# calculate frequency of crashes by hour
-crash_frequency_by_hour = df['hour'].value_counts().sort_index()
-
-
-print("Crash Frequency by Hour:\n", crash_frequency_by_hour)
-
-# check for crashes at midnight
-midnight_crashes = crash_frequency_by_hour[0]  # hour 0 corresponds to midnight
-print(f"\nNumber of crashes at midnight: {midnight_crashes}")
+df['crash_hour'] = pd.to_datetime(df['crash_time'], format='%H:%M').dt.hour
+crash_hourly_frequency = df['crash_hour'].value_counts().sort_index()
+print("Crash Frequency by Hour:", crash_hourly_frequency)
+midnight_crash_count = crash_hourly_frequency.get(0, 0)
+print(f"Crashes at midnight: {midnight_crash_count}")
 ```
 
-### Is there a matter of bad luck at exactly midnight? How would you interpret this?
-During midnight, many people might engage in behavior that is reckless. For example drinking or even theft along with other illegal activities as it is done while it is dark and most of the population is at home already. But also, we can account low visibility for the accidents that occur, as driving in the dark at this late hour can be dangerous. It isn't bad luck, it is simply due to the fact that most crimes and accidents happen at night.
+Crashes at midnight may be more frequent due to factors like low visibility, driver fatigue, or impaired driving. Not necessarily "bad luck" but a result of riskier driving conditions at that time.
 
-# Step 10 - Are the number of persons killed/injured the summation of the numbers of pedestrians, cyclist, and motorists killed/injured?
+# 10 - Are the number of persons killed/injured the summation of the numbers of pedestrians, cyclist, and motorists killed/injured? If so, is it redundant to keep these two columns at the NYC Open Data server?
 ```{python}
-# check if total killed/injured matches the sum of specific categories
-df['total_persons_injured'] = df['number_of_persons_injured']
-df['total_persons_killed'] = df['number_of_persons_killed']
+df['calculated_injured_total'] = df[['number_of_pedestrians_injured', 'number_of_cyclist_injured', 'number_of_motorist_injured']].sum(axis=1)
+df['calculated_killed_total'] = df[['number_of_pedestrians_killed', 'number_of_cyclist_killed', 'number_of_motorist_killed']].sum(axis=1)
 
-# Calculate sums
-df['calculated_total_injured'] = (
-    df['number_of_pedestrians_injured'] + 
-    df['number_of_cyclist_injured'] + 
-    df['number_of_motorist_injured']
-)
+injured_match = (df['number_of_persons_injured'] == df['calculated_injured_total']).all()
+killed_match = (df['number_of_persons_killed'] == df['calculated_killed_total']).all()
 
-df['calculated_total_killed'] = (
-    df['number_of_pedestrians_killed'] + 
-    df['number_of_cyclist_killed'] + 
-    df['number_of_motorist_killed']
-)
-
-# check for matches
-injured_match = (df['total_persons_injured'] == df['calculated_total_injured']).all()
-killed_match = (df['total_persons_killed'] == df['calculated_total_killed']).all()
-
-print(f"Total persons injured match: {injured_match}")
-print(f"Total persons killed match: {killed_match}")
+print(f"Injury totals match: {injured_match}")
+print(f"Fatality totals match: {killed_match}")
 ```
 
-It is redundant to keep both killed and injured columns as we can see there are discrepancies between the total number of persons injured reported and the sum of the specific categories of injuries (pedestrians, cyclists, and motorists injured). We cannot rely on the number of persons injured column and must fix the summation of the injured columns.
+It's redundant to keep both killed and injured columns since discrepancies exist between reported totals and the sum of specific injury categories. The summation of injured columns should be fixed for accuracy.
 
 # 11 - Print the whole frequency table of `contributing_factor_vehicle_1`. Convert lower cases to uppercases and check the frequencies again.
 ```{python}
-#print the whole frequency table of contributing_factor_vehicle_1
-frequency_table = df['contributing_factor_vehicle_1'].value_counts()
-print("\nFrequency Table for Contributing Factor Vehicle 1:\n", frequency_table)
+initial_factors_freq = df['contributing_factor_vehicle_1'].value_counts()
+print("Initial Frequency Table:", initial_factors_freq)
 
-# convert to upper case and check frequencies again
 df['contributing_factor_vehicle_1'] = df['contributing_factor_vehicle_1'].str.upper()
-upper_case_frequency_table = df['contributing_factor_vehicle_1'].value_counts()
-print("\nFrequency Table for Contributing Factor Vehicle 1 (Upper Case):\n", upper_case_frequency_table)
+
+upper_factors_freq = df['contributing_factor_vehicle_1'].value_counts()
+print("Uppercase Frequency Table:", upper_factors_freq)
 ```
 
 # 12 - Provided an opportunity to meet the data provider, what suggestions would you make based on your data exploration experience?
-While calculating the summation of injuries, I found an error with the data. We can see that the total amount of persons injured do not equal the total amount of each injury reported. Perhaps, we can add a new column of unspecified injuries to report in order to make the total correct. Another change I would suggest is fixing the longittude and latitude columns as some values are out of range. Moreover, if we were to stick with longitude and latitude values to begin with, then the other location columns are redundant. Besides, many of the columns like zip code, borough, street name, off street name and cross street name are missing. We should stick to improving the value inputs in the lat./long. columns instead. 
+Fix discrepancies in injury/fatality totals and ensure valid geolocation data
