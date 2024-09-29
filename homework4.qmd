@@ -6,7 +6,7 @@ format:
 jupyter: python3
 ---
 
-# Step 1 - Importing df
+# 1 - Use the filter from the website to download the crash data of the week of June 30, 2024 in CSV format; save it under a directory `data` with an informative name (e.g., `nyccrashes_2024w0630_by20240916.csv`); read the data into a Panda data frame with careful handling of the date time variables.
 
 ```{python}
 
@@ -18,44 +18,31 @@ import matplotlib
 df = pd.read_csv('nyccrashes_2024w0630_by20240916.csv')
 ```
 
-# Step 2 - Clean up variables
-
+# 2 - Clean up the variable names. Use lower cases and replace spaces with underscores.
 ```{python}
 
 # use lower cases and replace spaces with underscores.
 df.columns = df.columns.str.lower().str.replace(' ', '_')
 ```
 
-# Step 4 - Get the basic summaries of each variable
-### The missing percentage
+# 3 - Get the basic summaries of each variables: missing percentage; descriptive statistics for continuous variables; frequency tables for discrete variables.
 ```{python}
-
-# missing percentage
 missing_percentage = df.isnull().mean() * 100
-print("Missing Percentage:\n", missing_percentage)
+print("Missing Percentage:", missing_percentage)
 ```
-
-
-### Descriptive statistics for continuous variables
 ```{python}
-
-# descriptive statistics for continuous variables
 descriptive_stats = df.describe()
-print("\nDescriptive Statistics:\n", descriptive_stats)
+print("Descriptive Statistics:", descriptive_stats)
 ```
-
-### Frequency tables for discrete variables
 ```{python}
-
-# Frequency tables for discrete variables
 frequency_tables = {col: df[col].value_counts() for col in df.select_dtypes(include=['object', 'category']).columns}
-print("\nFrequency Tables:\n", frequency_tables)
+print("Frequency Tables:", frequency_tables)
 ```
 
-# Step 4 - Switch invalid longitude and latitude values to Na
+# 4 - Are their invalid `longitude` and `latitude` in the data? If so, replace them with `NA`.
 ```{python}
-latitude_column = 'latitude'  # Replace with actual column name
-longitude_column = 'longitude'  # Replace with actual column name
+latitude_column = 'latitude'  
+longitude_column = 'longitude'  
 
 #latitude: -90 to 90
 df[latitude_column] = np.where(
@@ -70,11 +57,11 @@ df[longitude_column] = np.where(
     np.nan, 
     df[longitude_column]
 )
-print("\nLongitude Column:\n", df[longitude_column])
-print("\nLatitude Column:\n", df[latitude_column])
+print("Longitude Column:", df[longitude_column])
+print("Latitude Column:", df[latitude_column])
 ```
 
-# Step 5 - Validate ZIP codes
+# 5 - Are there `zip_code` values that are not legit NYC zip codes? If so, replace them with `NA`.
 ```{python}
 # validate ZIP codes that are in range
 valid_nyc_zip_codes = {i for i in range(10001, 14975)}  
@@ -86,11 +73,10 @@ df['zip_code'] = np.where(
     np.nan
 )
 
-print("\nUpdated ZIP Code Column (after validation):\n", df['zip_code'].head())
+print("Updated ZIP Codes:", df['zip_code'].head())
 ```
 
-# Step 6: Check for missing values in zip_code and borough
-
+# 6: Are there missing in `zip_code` and `borough`? Do they always co-occur?
 ```{python}
 #identify rows where values are null
 missing_zip = df['zip_code'].isnull()
@@ -107,7 +93,7 @@ co_occur_count = co_occur_missing.shape[0]
 print(f"Co-occurring Missing ZIP CODE and BOROUGH Count: {co_occur_count}")
 ```
 
-# Step 7: Check for cases where zip_code and borough are missing but geo codes are not missing
+# 7 - Are there cases where `zip_code` and `borough` are missing but the geo codes are not missing? If so, fill in `zip_code` and `borough` using the geo codes.
 ```{python}
 # check for cases where both are missing but geo codes are present
 missing_but_geo_present = df[missing_zip & missing_borough & df['latitude'].notnull() & df['longitude'].notnull()]
@@ -125,10 +111,10 @@ print("\nUpdated DataFrame (sample):\n", df[['zip_code', 'borough']].head())
 
 ```
 
-# Step 8 - Is it redundant to keep both location and the longitude/latitude at the NYC Open Data server?
+# 8 - Is it redundant to keep both location and the longitude/latitude at the NYC Open Data server?
 Although we recieve the exact point of location when we use long/lati, it isn't user friendly. This method takes up a lot of stored data space and can cause confusion when handiling and cleaning the data. However, I do believe that it isn't redundant to keep both. Having a percise location data point would work in our favor if we could visualize it on a map. This way, we can figure out the problem that is occuring in that specific spot. 
 
-# Step 9 - Check the frequency of crash_time by hour. Is there a matter of bad luck at exactly midnight? 
+# 9 - Check the frequency of `crash_time` by hour. Is there a matter of bad luck at exactly midnight? How would you interpret this? 
 
 ```{python}
 
@@ -175,10 +161,9 @@ print(f"Total persons injured match: {injured_match}")
 print(f"Total persons killed match: {killed_match}")
 ```
 
-### Is it redundant to keep these two columns at the NYC Open Data server?
 It is redundant to keep both killed and injured columns as we can see there are discrepancies between the total number of persons injured reported and the sum of the specific categories of injuries (pedestrians, cyclists, and motorists injured). We cannot rely on the number of persons injured column and must fix the summation of the injured columns.
 
-# Step 11 - Print the whole frequency table of contributing_factor_vehicle_1. Convert lower cases to uppercases and check the frequencies again.
+# 11 - Print the whole frequency table of `contributing_factor_vehicle_1`. Convert lower cases to uppercases and check the frequencies again.
 ```{python}
 #print the whole frequency table of contributing_factor_vehicle_1
 frequency_table = df['contributing_factor_vehicle_1'].value_counts()
@@ -190,6 +175,5 @@ upper_case_frequency_table = df['contributing_factor_vehicle_1'].value_counts()
 print("\nFrequency Table for Contributing Factor Vehicle 1 (Upper Case):\n", upper_case_frequency_table)
 ```
 
-# Step 12 - Provided an opportunity to meet the data provider, what suggestions would you make based on your data exploration experience?
-
+# 12 - Provided an opportunity to meet the data provider, what suggestions would you make based on your data exploration experience?
 While calculating the summation of injuries, I found an error with the data. We can see that the total amount of persons injured do not equal the total amount of each injury reported. Perhaps, we can add a new column of unspecified injuries to report in order to make the total correct. Another change I would suggest is fixing the longittude and latitude columns as some values are out of range. Moreover, if we were to stick with longitude and latitude values to begin with, then the other location columns are redundant. Besides, many of the columns like zip code, borough, street name, off street name and cross street name are missing. We should stick to improving the value inputs in the lat./long. columns instead. 
