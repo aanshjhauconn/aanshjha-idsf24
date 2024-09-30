@@ -1,0 +1,7 @@
+---
+title: "Aansh Jha Homework 5"
+format:
+  pdf:
+    code-fold: false
+jupyter: python3
+---
