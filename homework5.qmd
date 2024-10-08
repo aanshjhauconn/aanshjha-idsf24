@@ -7,25 +7,122 @@ jupyter: python3
 ---
 ```{python}
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
 
-## Thanks Mohammad Shahriyar Parvez for filling the missing zip codes
-crashes = pd.read_csv("data/cleaned_nyccrashes_msp.csv")
+csv_file = r'C:\Users\aansh\OneDrive\Desktop\Senior Year\STAT 3255\aanshjha-idsf24\data\nyccrashes_2024w0630_by20240916.csv'
+feather_file = r'C:\Users\aansh\OneDrive\Desktop\Senior Year\STAT 3255\aanshjha-idsf24\data\nyccrashes_cleaned.feather'
 
-crashes['zip_code'].isnull().sum()
+df = pd.read_csv(csv_file)
 
-## Save into feather format
-crashes.to_feather('data/nyccrashes_cleaned.feather')
+df.to_feather(feather_file)
+
+csv_size = os.path.getsize(csv_file)
+feather_size = os.path.getsize(feather_file)
+
+csv_size_mb = csv_size / (1024 * 1024)
+feather_size_mb = feather_size / (1024 * 1024)
+
+print(f"CSV file size: {csv_size_mb} MB")
+print(f"Feather file size: {feather_size_mb} MB")
+
+dff = pd.read_feather(feather_file)
+print(dff.shape)
+print(dff.head())
+
+print(dff.head())
 ```
 
 # 1. Construct a contigency table for missing in geocode (latitude and longitude) by borough. Is the missing pattern the same across boroughs? Formulate a hypothesis and test it.
+```{python}
+dff['Missing_Geocode'] = dff['LATITUDE'].isnull() | dff['LONGITUDE'].isnull()
+
+# Create the contingency table
+contingency_table = pd.crosstab(dff['BOROUGH'], dff['Missing_Geocode'])
+print(contingency_table)
+```
 
 # 2. Construct a hour variable with integer values from 0 to 23. Plot the histogram of the number of crashes by hour. Plot it by borough.
+```{python}
+dff['CRASH TIME'] = pd.to_datetime(dff['CRASH TIME'])
+dff['hour'] = dff['CRASH TIME'].dt.hour
+
+not_missing_borough = dff.dropna(subset=['BOROUGH'])
+
+plt.figure(figsize=(10, 6))
+for borough in not_missing_borough['BOROUGH'].unique():
+    borough_data = not_missing_borough[not_missing_borough['BOROUGH'] == borough]
+    plt.hist(borough_data['hour'], bins=24, alpha=0.5, label=borough)
+
+plt.xlabel('Hour of Day')
+plt.ylabel('Number of Crashes')
+plt.title('Number of Crashes by Hour and Borough')
+plt.xticks(range(24))
+plt.legend(title='Borough')
+plt.show()
+
+```
 
 # 3. Overlay the locations of the crashes on a map of NYC. The map could be a static map or Google map.
+```{python}
+import geopandas as gpd
+from shapely.geometry import Point
+import contextily as ctx
+
+# Create a GeoDataFrame
+geometry = [Point(xy) for xy in zip(dff['LONGITUDE'], dff['LATITUDE'])]
+gdf = gpd.GeoDataFrame(dff, geometry=geometry)
+gdf.crs = "EPSG:4326"  # WGS 84
+
+# Filter for NYC bounds
+nyc_bounds = gdf.cx[-74.05:-73.85, 40.63:40.85]
+if nyc_bounds.empty:
+    print("No crash data within NYC bounds.")
+else:
+    # Reproject to Web Mercator
+    gdf_nyc = nyc_bounds.to_crs(epsg=3857)
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=(12, 12))
+    gdf_nyc.plot(ax=ax, marker='o', color='red', markersize=5, alpha=0.5)
+    ctx.add_basemap(ax, crs=gdf_nyc.crs.to_string())
+
+    plt.title("Crash Locations in New York City")
+    plt.xlabel("Longitude")
+    plt.ylabel("Latitude")
+    plt.savefig('nyc_crashes_overlay.png', dpi=300)
+    plt.show()
+```
 
 # 4. Create a new variable severe which is one if the number of persons injured of deaths is 1 or more; and zero otherwise. Construct a cross table for severe versus borough. Is the severity of the crashes the same across boroughs? Test the null hypothesis that the two variables are not associated with an appropriate test.
+```{python}
+import scipy.stats as stats
 
-# 5. Merge the crash data with the zip code database.
+# Create the 'SEVERE' variable
+dff['SEVERE'] = ((dff['NUMBER OF PERSONS INJURED'] > 0) | (dff['NUMBER OF PERSONS KILLED'] > 0)).astype(int)
 
-# 6. Fit a logistic model with severe as the outcome variable and covariates that are available in the data or can be engineered from the data. For example, zip code level covariates can be obtained by merging with the zip code database.
+# Construct the crosstab
+severity_borough_table = pd.crosstab(dff['BOROUGH'], dff['SEVERE'])
+print("Crosstab of SEVERE vs BOROUGH:")
+print(severity_borough_table)
 
+# Perform chi-square test
+chi2, p, dof, expected = stats.chi2_contingency(severity_borough_table)
+print("\nChi-Square Test Results:")
+print(f"Chi-Square Statistic: {chi2}")
+print(f"P-value: {p}")
+print(f"Degrees of Freedom: {dof}")
+
+# Interpret the result
+alpha = 0.05
+if p < alpha:
+    print("Reject the null hypothesis: There is an association between severity and borough.")
+else:
+    print("Fail to reject the null hypothesis: No association between severity and borough.")
+```
+
+# 5. Merge the crash data with the zip code database.(Unsolvable!?)
+
+# 6. Fit a logistic model with severe as the outcome variable and covariates that are available in the data or can be engineered from the data. For example, zip code level covariates can be obtained by merging with the zip code database.(Unsolvable!?)
