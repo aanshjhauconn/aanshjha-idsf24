@@ -1,0 +1,188 @@
+---
+title: "Aansh Jha Midterm NYC"
+format:
+  pdf:
+    code-fold: false
+jupyter: python3
+---
+# 0. Imports
+```{python}
+import pandas as pd
+import pyarrow as pa
+import pyarrow.csv as pcsv
+from geopy.geocoders import Nominatim
+from geopy.distance import great_circle
+from uszipcode import SearchEngine
+from scipy.stats import ranksums, chi2_contingency
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
+from plotnine import *
+import numpy as np
+import time
+```
+
+# 1. Data Cleaning
+```{python}
+# Importing and cleaning the data
+noise_data = pd.read_csv('data/nypd311w063024noise_by100724.csv')
+noise_data.columns = noise_data.columns.str.lower().str.replace(' ', '_')
+
+# Summarize the missing information
+def summarize_missing_info(df):
+    missing_info = df.isnull().sum()
+    missing_info_pct = (missing_info / len(df)) * 100
+    print('Missing information summary:')
+    print(pd.DataFrame({'missing_count': missing_info, 'missing_pct': missing_info_pct}))
+
+summarize_missing_info(noise_data)
+
+# Check if zip_code and borough are missing and if they co-occur
+missing_zip_and_borough = noise_data[noise_data['incident_zip'].isna() & noise_data['borough'].isna()]
+print(f"Number of records where both zip_code and borough are missing: {len(missing_zip_and_borough)}")
+
+# Check if missing in zip_code and borough always co-occur
+missing_cooccur = noise_data[['incident_zip', 'borough']].isnull().all(axis=1).sum()
+total_missing_zip_code = noise_data['incident_zip'].isnull().sum()
+total_missing_borough = noise_data['borough'].isnull().sum()
+
+# Check if zip_code and borough are missing but geo codes are present
+missing_zip_borough_with_geo = noise_data[noise_data['incident_zip'].isna() & noise_data['borough'].isna() & ~noise_data['latitude'].isna() & ~noise_data['longitude'].isna()]
+
+geolocator = Nominatim(user_agent="nyc_noise_geocoder")
+
+def get_zip_code(latitude, longitude):
+    try:
+        location = geolocator.reverse((latitude, longitude), timeout=10)
+        if location:
+            address = location.raw['address']
+            zip_code = address.get('postcode', None)
+            borough = address.get('borough', None) or address.get('city', None)
+            return zip_code, borough
+        else:
+            return None, None
+    except Exception as e:
+        return None, None
+    finally:
+        time.sleep(1)  
+
+# Fill in missing zip_code and borough using geo codes where possible
+for idx, row in missing_zip_borough_with_geo.iterrows():
+    if pd.notna(row['latitude']) and pd.notna(row['longitude']):
+        zip_code, borough = get_zip_code(row['latitude'], row['longitude'])
+        if zip_code:
+            noise_data.at[idx, 'incident_zip'] = zip_code
+        if borough:
+            noise_data.at[idx, 'borough'] = borough.upper()
+
+
+valid_boroughs = ['MANHATTAN', 'BROOKLYN', 'QUEENS', 'BRONX', 'STATEN ISLAND']
+noise_data = noise_data[noise_data['borough'].isin(valid_boroughs)]
+
+zip_code_map = {
+    'MANHATTAN': 10000,
+    'QUEENS': 11300,
+    'BROOKLYN': 11200,
+    'BRONX': 10400,
+    'STATEN ISLAND': 10300
+}
+
+for idx, row in noise_data.iterrows():
+    if pd.isna(row['incident_zip']) or row['incident_zip'] == 0:
+        noise_data.at[idx, 'incident_zip'] = zip_code_map.get(row['borough'], row['incident_zip'])
+
+# Check for date errors - parsing and cleaning dates
+noise_data['created_date'] = pd.to_datetime(noise_data['created_date'], format='%m/%d/%Y %I:%M', errors='coerce')
+noise_data['closed_date'] = pd.to_datetime(noise_data['closed_date'], format='%m/%d/%Y %I:%M', errors='coerce')
+noise_data = noise_data[~(noise_data['closed_date'] < noise_data['created_date'])]
+
+print('''
+Suggestions for Data Curator:
+- Missing borough information was filled based on latitude/longitude where available using reverse geocoding.
+- Missing zip codes were filled using borough information or geolocation data.
+- Removed records with date inconsistencies, such as closed_date earlier than created_date.
+''')
+```
+
+# 2. Data Exploration
+```{python}
+noise_data['hour'] = noise_data['created_date'].dt.hour
+noise_data['time_of_day'] = np.where((noise_data['hour'] >= 6) & (noise_data['hour'] < 18), 'Day', 'Night')
+
+# Assuming response_time has been calculated previously
+noise_data['response_time'] = (noise_data['closed_date'] - noise_data['created_date']).dt.total_seconds() / 3600
+
+# Plot response time for each time_of_day
+from plotnine import ggplot, aes, geom_boxplot, labs, facet_wrap
+
+plot = (
+    ggplot(noise_data, aes(x='time_of_day', y='response_time', fill='complaint_type')) +
+    geom_boxplot() +
+    facet_wrap('borough') +
+    labs(title='Response Time by Day/Night', x='Time of Day', y='Response Time (hours)')
+)
+plot.show()
+
+day_responses = noise_data.loc[noise_data['time_of_day'] == 'Day', 'response_time']
+night_responses = noise_data.loc[noise_data['time_of_day'] == 'Night', 'response_time']
+
+stat, p_value = ranksums(day_responses, night_responses)
+print(f"Rank-sum test statistic: {stat}, p-value: {p_value}")
+
+# Interpret results
+if p_value < 0.05:
+    print("Reject the null hypothesis - There is a significant difference in response times between day and night.")
+else:
+    print("Fail to reject the null hypothesis - No significant difference found.")
+
+noise_data['over2h'] = np.where(noise_data['response_time'] >= 2, 1, 0)
+
+contingency_table = pd.crosstab(noise_data['over2h'], noise_data['borough'])
+chi2, p, dof, ex = chi2_contingency(contingency_table)
+print(f"Chi2 Statistic: {chi2}, p-value: {p}")
+
+if p < 0.05:
+    print("Reject the null hypothesis - `over2h` depends on `borough`.")
+else:
+    print("Fail to reject the null hypothesis - No dependency found.")
+```
+
+# 3. Data Analysis
+```{python}
+precincts_data = pd.read_csv('/mnt/data/nypd_precincts.csv')
+precincts_data['geocode'] = precincts_data['address'].apply(lambda x: geolocator.geocode(x) if pd.notna(x) else None)
+
+# Extract lat/lon from geocode results
+precincts_data['latitude'] = precincts_data['geocode'].apply(lambda x: x.latitude if x else None)
+precincts_data['longitude'] = precincts_data['geocode'].apply(lambda x: x.longitude if x else None)
+
+def calculate_min_distance(lat, lon, precincts_df):
+    distances = precincts_df.apply(lambda row: great_circle((lat, lon), (row['latitude'], row['longitude'])).km, axis=1)
+    return distances.min()
+
+noise_data['dist2pp'] = noise_data.apply(lambda row: calculate_min_distance(row['latitude'], row['longitude'], precincts_data) if pd.notna(row['latitude']) and pd.notna(row['longitude']) else None, axis=1)
+
+train_data, test_data = train_test_split(noise_data, test_size=0.2, random_state=1234)
+
+features = ['complaint_type', 'borough', 'time_of_day', 'dist2pp']
+X_train = pd.get_dummies(train_data[features], drop_first=True)
+y_train = train_data['over2h']
+
+model = LogisticRegression()
+model.fit(X_train, y_train)
+
+X_test = pd.get_dummies(test_data[features], drop_first=True)
+y_test = test_data['over2h']
+
+predictions = model.predict(X_test)
+acc = accuracy_score(y_test, predictions)
+auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
+
+print(f"Accuracy: {acc}")
+print(f"AUC: {auc}")
+print(classification_report(y_test, predictions))
+
+
+print("We analyzed noise complaints across NYC and found that response time can depend on factors like time of day, borough, and complaint type. A logistic regression model was built to predict if it would take over two hours for a noise complaint to be resolved, using features like the type of complaint, borough, time of day, and distance to the nearest police precinct.")
+```
+
